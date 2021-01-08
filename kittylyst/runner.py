@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Optional, Tuple
 from collections import defaultdict
 from functools import lru_cache
 
@@ -7,7 +7,7 @@ import numpy as np
 from kittylyst.callback import ICallback
 from kittylyst.experiment import IExperiment
 from kittylyst.logger import ILogger
-from kittylyst.misc import set_random_seed
+from kittylyst.misc import format_metrics, set_random_seed, unvalue
 
 
 @lru_cache(maxsize=42)
@@ -44,9 +44,10 @@ class IRunner(ICallback, ILogger):
         self.input = None
         self.output = None
 
+        # @TODO: do we need to store metrics under Runner?
         # metrics flow - batch, loader and epoch metrics
         self.batch_metrics: Dict = defaultdict(None)
-        self.loader_metrics: Dict = defaultdict(None)
+        self.loader_metrics: Dict = defaultdict(lambda: [])
         self.epoch_metrics: Dict = defaultdict(None)
         # self.stage_metrics: Dict = defaultdict(None)
         # self.experiment_metrics: Dict = defaultdict(None)
@@ -80,21 +81,17 @@ class IRunner(ICallback, ILogger):
         # extra
         self.exception: Exception = None
 
-    def log_metrics(
-        self, metrics: Dict[str, float], step: Optional[int] = None,
-    ) -> None:
+    def log_metrics(self, *args, **kwargs) -> None:
         for logger in self.loggers.values():
-            logger.log_metrics(metrics=metrics, step=step)
+            logger.log_metrics(*args, **kwargs)
 
-    def log_image(
-        self, image: np.ndarray, step: Optional[int] = None,
-    ) -> None:
+    def log_image(self, *args, **kwargs) -> None:
         for logger in self.loggers.values():
-            logger.log_image(image=image, step=step)
+            logger.log_image(*args, **kwargs)
 
-    def log_hparams(self, hparams: Dict) -> None:
+    def log_hparams(self, *args, **kwargs) -> None:
         for logger in self.loggers.values():
-            logger.log_hparams(hparams=hparams)
+            logger.log_hparams(*args, **kwargs)
 
     def on_experiment_start(self, runner: "IRunner"):
         assert self.experiment is not None
@@ -141,7 +138,7 @@ class IRunner(ICallback, ILogger):
         self.is_train_loader = self.loader_key.startswith("train")
         self.is_valid_loader = self.loader_key.startswith("valid")
         self.is_infer_loader = self.loader_key.startswith("infer")
-        self.loader_metrics: Dict = defaultdict(None)
+        self.loader_metrics: Dict = defaultdict(lambda: [])
 
     def on_batch_start(self, runner: "IRunner"):
         self.batch_size = len(self.input[0])
@@ -152,17 +149,47 @@ class IRunner(ICallback, ILogger):
         self.batch_metrics: Dict = defaultdict(None)
 
     def on_batch_end(self, runner: "IRunner"):
-        # @TODO: do we need to log metics here?
-        # self.log_metrics(metrics=self.batch_metrics, step=self.global_sample_step)
-        pass
+        # @TODO: do we need to log metrics here?
+        self.log_metrics(
+            metrics=self.batch_metrics,
+            step=self.loader_batch_step,
+            step_limit=self.loader_len,
+            scope="batch",
+        )
+        self.log_metrics(
+            metrics=self.batch_metrics,
+            step=self.global_batch_step,
+            scope="global_batch",
+        )
+        for k, v in self.batch_metrics.items():
+            self.loader_metrics[k].append(unvalue(v))
 
     def on_loader_end(self, runner: "IRunner"):
-        pass
+        # @TODO: do we need to log metrics here?
+        self.log_metrics(
+            metrics=self.loader_metrics,
+            step=self.stage_epoch,
+            step_limit=self.stage_len,
+            scope="loader",
+            scope_name=self.loader_key,
+        )
+        self.epoch_metrics[self.loader_key] = {
+            k: np.mean(v) for k, v in self.loader_metrics.items()
+        }
 
     def on_epoch_end(self, runner: "IRunner"):
-        # @TODO: do we need to log metics here?
-        # self.log_metrics(metrics=self.epoch_metrics, step=self.global_epoch)
-        pass
+        # @TODO: do we need to log metrics here?
+        self.log_metrics(
+            metrics=self.epoch_metrics,
+            step=self.stage_epoch,
+            step_limit=self.stage_len,
+            scope="epoch",
+        )
+        self.log_metrics(
+            metrics=self.epoch_metrics,
+            step=self.global_epoch,
+            scope="global_epoch",
+        )
 
     def on_stage_end(self, runner: "IRunner"):
         pass
@@ -208,7 +235,7 @@ class IRunner(ICallback, ILogger):
 
     def _run_stage(self) -> None:
         self._run_event("on_stage_start")
-        while self.stage_epoch < self.stage_len + 1:
+        while self.stage_epoch < self.stage_len:
             self._run_epoch()
             if self.need_early_stop:
                 # @TODO: do we need extra event for early stop?

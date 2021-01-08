@@ -10,7 +10,7 @@ from kittylyst.callback import (
     ICallback,
     AccuracyCallback,
     CriterionCallback,
-    LoggerCallback,
+    # LoggerCallback,
     OptimizerCallback,
     SchedulerCallback,
 )

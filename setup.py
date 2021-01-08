@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="kittylyst",
-    version="0.1.0",
+    version="0.2.0",
     author="Sergey Kolesnikov",
     author_email="scitator@gmail.com",
     description="A tiny Catalyst-like experiment runner framework on top of micrograd.",

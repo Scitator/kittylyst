@@ -84,16 +84,16 @@ class SchedulerCallback(ICallback):
         runner.scheduler.step(runner.stage_epoch)
 
 
-class LoggerCallback(ICallback):
-    def on_batch_end(self, runner: "IRunner"):
-        for k, v in runner.batch_metrics.items():
-            runner.loader_metrics[k].append(unvalue(v))
-
-    def on_loader_end(self, runner: "IRunner"):
-        metrics = {k: np.mean(v) for k, v in runner.loader_metrics.items()}
-        msg = (
-            f"{runner.stage_epoch + 1}/{runner.stage_len}"
-            + f" Epoch ({runner.loader_key}) "
-            + format_metrics(metrics)
-        )
-        print(msg)
+# class LoggerCallback(ICallback):
+#     def on_batch_end(self, runner: "IRunner"):
+#         for k, v in runner.batch_metrics.items():
+#             runner.loader_metrics[k].append(unvalue(v))
+#
+#     def on_loader_end(self, runner: "IRunner"):
+#         metrics = {k: np.mean(v) for k, v in runner.loader_metrics.items()}
+#         msg = (
+#             f"{runner.stage_epoch + 1}/{runner.stage_len}"
+#             + f" Epoch ({runner.loader_key}) "
+#             + format_metrics(metrics)
+#         )
+#         print(msg)
