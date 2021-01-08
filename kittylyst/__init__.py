@@ -6,14 +6,17 @@ from kittylyst.misc import (
     MicroOptimizer,
     MicroScheduler,
 )
+from kittylyst.metric import IMetric, AverageMetric, AccuracyMetric
+from kittylyst.logger import ILogger, ConsoleLogger
 from kittylyst.callback import (
     ICallback,
-    AccuracyCallback,
+    MetricCallback,
+    # AccuracyCallback,
     CriterionCallback,
     # LoggerCallback,
     OptimizerCallback,
     SchedulerCallback,
+    VerboseCallback,
 )
-from kittylyst.logger import ILogger, ConsoleLogger
 from kittylyst.experiment import IExperiment, SingleStageExperiment
 from kittylyst.runner import IRunner, SupervisedRunner

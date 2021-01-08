@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from kittylyst.misc import format_metrics, unvalue
+from kittylyst.misc import format_metrics
 
 
 class ILogger(ABC):

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, TYPE_CHECKING
+from typing import Any, Dict, List
 
 from kittylyst.callback import ICallback
 from kittylyst.logger import ILogger

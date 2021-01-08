@@ -161,8 +161,8 @@ class IRunner(ICallback, ILogger):
             step=self.global_batch_step,
             scope="global_batch",
         )
-        for k, v in self.batch_metrics.items():
-            self.loader_metrics[k].append(unvalue(v))
+        # for k, v in self.batch_metrics.items():
+        #     self.loader_metrics[k].append(unvalue(v))
 
     def on_loader_end(self, runner: "IRunner"):
         # @TODO: do we need to log metrics here?
@@ -173,23 +173,25 @@ class IRunner(ICallback, ILogger):
             scope="loader",
             scope_name=self.loader_key,
         )
-        self.epoch_metrics[self.loader_key] = {
-            k: np.mean(v) for k, v in self.loader_metrics.items()
-        }
+        self.epoch_metrics[self.loader_key] = self.loader_metrics.copy()
+        # self.epoch_metrics[self.loader_key] = {
+        #     k: np.mean(v) for k, v in self.loader_metrics.items()
+        # }
 
     def on_epoch_end(self, runner: "IRunner"):
+        pass
         # @TODO: do we need to log metrics here?
-        self.log_metrics(
-            metrics=self.epoch_metrics,
-            step=self.stage_epoch,
-            step_limit=self.stage_len,
-            scope="epoch",
-        )
-        self.log_metrics(
-            metrics=self.epoch_metrics,
-            step=self.global_epoch,
-            scope="global_epoch",
-        )
+        # self.log_metrics(
+        #     metrics=self.epoch_metrics,
+        #     step=self.stage_epoch,
+        #     step_limit=self.stage_len,
+        #     scope="epoch",
+        # )
+        # self.log_metrics(
+        #     metrics=self.epoch_metrics,
+        #     step=self.global_epoch,
+        #     scope="global_epoch",
+        # )
 
     def on_stage_end(self, runner: "IRunner"):
         pass
