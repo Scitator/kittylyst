@@ -207,7 +207,7 @@ class IRunner(ICallback, ILogger):
         # )
 
     def on_stage_end(self, runner: "IRunner"):
-        pass
+        self.engine.deinit_components()
 
     def on_experiment_end(self, runner: "IRunner"):
         pass
@@ -261,7 +261,13 @@ class IRunner(ICallback, ILogger):
     def _run_experiment(self) -> None:
         self._run_event("on_experiment_start")
         for self.stage in self.experiment.stages:
-            self._run_stage()
+            if self.engine.rank < 0:
+                # single-device branch
+                self._run_stage()
+            else:
+                # ddp-device branch
+                # mp.spawn(self._run_stage, num_process=self.engine.world_size)
+                raise NotImplementedError()
         self._run_event("on_experiment_end")
 
     def run_experiment(self, experiment: IExperiment = None) -> "IRunner":

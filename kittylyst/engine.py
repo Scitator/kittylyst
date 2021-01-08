@@ -15,6 +15,17 @@ class IEngine(ABC):
     - ddp (torch, etc)
     """
 
+    @property
+    @abstractmethod
+    def rank(self) -> int:
+        pass
+
+    @property
+    @abstractmethod
+    def world_size(self) -> int:
+        # only for ddp
+        pass
+
     @abstractmethod
     def sync_device(self, tensor_or_module: Any) -> Any:
         pass
@@ -32,6 +43,11 @@ class IEngine(ABC):
         optimizer_fn=None,
         scheduler_fn=None,
     ):
+        pass
+
+    @abstractmethod
+    def deinit_components(self):
+        # only for ddp
         pass
 
     @abstractmethod
@@ -76,6 +92,14 @@ class IEngine(ABC):
 
 
 class Engine(IEngine):
+    @property
+    def rank(self) -> int:
+        return -1
+
+    @property
+    def world_size(self) -> int:
+        return 1
+
     def sync_device(self, tensor_or_module: Any) -> Any:
         return tensor_or_module
 
@@ -94,6 +118,9 @@ class Engine(IEngine):
         optimizer = optimizer_fn(model=model)
         scheduler = scheduler_fn(optimizer=optimizer)
         return model, criterion, optimizer, scheduler
+
+    def deinit_components(self):
+        pass
 
     def pack_checkpoint(
         self,
