@@ -2,6 +2,9 @@ from typing import Any, Dict
 from abc import ABC, abstractmethod
 
 import numpy as np
+from sklearn.metrics import roc_auc_score
+
+from kittylyst.misc import unvalue
 
 
 class IMetric(ABC):
@@ -82,12 +85,37 @@ class AverageMetric(IMetric):
 
 class AccuracyMetric(AverageMetric):
     def update(self, logits, targets) -> None:
-        accuracy = [
-            (yi > 0) == (li.data > 0) for yi, li in zip(targets, logits)
-        ]
+        logits = [unvalue(x) for x in logits]
+        accuracy = [(yi > 0) == (li > 0) for yi, li in zip(targets, logits)]
         value = sum(accuracy) / len(accuracy)
         super().update(value, len(accuracy))
 
     def compute_key_value(self) -> Dict[str, float]:
         mean, std = super().compute()
         return {"accuracy_mean": mean, "accuracy_std": std}
+
+
+class AUCMetric(IMetric):
+    def __init__(self, compute_on_call: bool = True):
+        super().__init__(compute_on_call=compute_on_call)
+        self.inputs = []
+        self.targets = []
+
+    def reset(self) -> None:
+        self.inputs = []
+        self.targets = []
+
+    def update(self, logits, targets) -> None:
+        logits = [unvalue(x) for x in logits]
+        self.inputs.extend(logits)
+        self.targets.extend(targets)
+
+    def compute(self) -> float:
+        sigmoid = lambda x: 1 / (1 + np.exp(-x))
+        y_true = (np.array(self.targets) > 0).astype(np.int32)
+        y_score = sigmoid(np.array(self.inputs))
+        score = roc_auc_score(y_true=y_true, y_score=y_score)
+        return score
+
+    def compute_key_value(self) -> Dict[str, float]:
+        return {"auc": self.compute()}

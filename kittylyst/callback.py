@@ -48,10 +48,17 @@ class ICallback:
 
 
 class MetricCallback(ICallback):
-    def __init__(self, metric: IMetric, input_key: str, output_key: str):
+    def __init__(
+        self,
+        metric: IMetric,
+        input_key: str,
+        output_key: str,
+        compute_on_batch: bool = True,
+    ):
         self.metric = metric
         self.input_key = input_key
         self.output_key = output_key
+        self.compute_on_batch = compute_on_batch
 
     def on_loader_start(self, runner: "IRunner") -> None:
         self.metric.reset()
@@ -61,7 +68,8 @@ class MetricCallback(ICallback):
         inputs = runner.output[self.output_key]
         targets = runner.input[self.input_key]
         self.metric.update(inputs, targets)
-        runner.batch_metrics.update(self.metric.compute_key_value())
+        if self.compute_on_batch:
+            runner.batch_metrics.update(self.metric.compute_key_value())
 
     def on_loader_end(self, runner: "IRunner") -> None:
         runner.loader_metrics.update(self.metric.compute_key_value())

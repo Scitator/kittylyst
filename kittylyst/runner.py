@@ -39,6 +39,8 @@ class IRunner(ICallback, ILogger):
         self.loggers: Dict[str, ILogger] = {}
 
         # the dataflow - model input, model output
+        # @TODO: could we make just self.batch_tensors ?
+        # to store input and output?
         self.input = None
         self.output = None
 
