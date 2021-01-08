@@ -1,3 +1,4 @@
+from typing import Dict
 import random
 
 import numpy as np
@@ -8,6 +9,14 @@ from micrograd.engine import Value
 def set_random_seed(seed: int = 42):
     np.random.seed(seed)
     random.seed(seed)
+
+
+def unvalue(value):
+    return value.data if isinstance(value, Value) else value
+
+
+def format_metrics(dct: Dict):
+    return " ".join([f"{k}: {unvalue(dct[k])}" for k in sorted(dct.keys())])
 
 
 class MicroLoader:

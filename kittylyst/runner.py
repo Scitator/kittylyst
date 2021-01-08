@@ -1,92 +1,235 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 from collections import defaultdict
+from functools import lru_cache
 
-from tqdm.auto import tqdm
+import numpy as np
 
+from kittylyst.callback import ICallback
+from kittylyst.experiment import IExperiment
+from kittylyst.logger import ILogger
 from kittylyst.misc import set_random_seed
 
 
-class IRunner:
+@lru_cache(maxsize=42)
+def _is_substring(origin_string: str, strings: Tuple):
+    return any(x in origin_string for x in strings)
+
+
+class IRunner(ICallback, ILogger):
     """An abstraction that knows **how** to run an experiment.
 
     IRunner contains all the logic of how to run the experiment,
     stages, epoch and batches.
     """
 
-    def __init__(self):
-        # experiment components
-        self.model = None
+    def __init__(
+        self, engine=None, model=None, experiment: IExperiment = None
+    ):
+        # main
+        self.engine = engine
+        self.model = model
+        self.experiment: IExperiment = experiment
+        # the data
+        self.loaders: Dict[str, Any] = None
+        # components
         self.criterion = None
         self.optimizer = None
         self.scheduler = None
-        # and callbacks
-        self.callbacks: List = []
+        # callbacks
+        self.callbacks: Dict[str, ICallback] = {}
+        # loggers
+        self.loggers: Dict[str, ILogger] = {}
 
-        # and the data
-        self.loaders: Dict[str, Any] = None
-        self.is_train_loader: bool = False
-        # and the dataflow - model input, model output
+        # the dataflow - model input, model output
         self.input = None
         self.output = None
 
-        # metrics flow - batch, loader, epoch metrics
+        # metrics flow - batch, loader and epoch metrics
         self.batch_metrics: Dict = defaultdict(None)
-        self.loader_metrics: Dict = defaultdict(lambda: [])
+        self.loader_metrics: Dict = defaultdict(None)
+        self.epoch_metrics: Dict = defaultdict(None)
+        # self.stage_metrics: Dict = defaultdict(None)
+        # self.experiment_metrics: Dict = defaultdict(None)
 
-        # metrics & validation
-        self.main_metric: str = None
-        self.minimize_metric: bool = None
+        # experiment info
+        self.global_sample_step: int = 0
+        self.global_batch_step: int = 0
+        self.global_epoch: int = 0
+        self.need_early_stop: bool = False
+        # self.need_exception_reraise: bool = True
 
-        # info
-        self.num_epochs: int = 1
-        self.epoch: int = 0
-        self.loader_name: str = None
-        self.verbose: bool = False
+        # stage info
+        self.stage: str = "infer"
+        self.stage_len: int = 0
+        self.is_infer_stage: bool = self.stage.startswith("infer")
+        # epoch info
+        self.stage_epoch: int = 0
+        # loader info
+        self.loader = None
+        self.loader_sample_step: int = 0
+        self.loader_batch_step: int = 0
+        self.loader_key: str = None
+        self.loader_len: int = 0
+        self.loader_batch_size = 0
+        self.is_train_loader: bool = False
+        self.is_valid_loader: bool = False
+        self.is_infer_loader: bool = True
+        # batch info
+        self.batch_size: int = 0
 
-        self.experiment = None
+        # extra
+        self.exception: Exception = None
+
+    def log_metrics(
+        self, metrics: Dict[str, float], step: Optional[int] = None,
+    ) -> None:
+        for logger in self.loggers.values():
+            logger.log_metrics(metrics=metrics, step=step)
+
+    def log_image(
+        self, image: np.ndarray, step: Optional[int] = None,
+    ) -> None:
+        for logger in self.loggers.values():
+            logger.log_image(image=image, step=step)
+
+    def log_hparams(self, hparams: Dict) -> None:
+        for logger in self.loggers.values():
+            logger.log_hparams(hparams=hparams)
+
+    def on_experiment_start(self, runner: "IRunner"):
+        assert self.experiment is not None
+        self.loggers = self.experiment.get_loggers()
+        self.log_hparams(hparams=self.experiment.hparams)
+
+    def on_stage_start(self, runner: "IRunner"):
+        assert self.stage is not None
+        stage_params = self.experiment.get_stage_params(self.stage)
+        # @TODO: think about naming here
+        self.stage_len = stage_params["num_epochs"]
+        # migrate_from_previous_stage = stage_params.get(...)
+        # some custom logic is possible here
+        set_random_seed(self.experiment.seed + self.global_epoch)
+        self.loaders = self.experiment.get_data(self.stage)
+        self.model = self.experiment.get_model(self.stage)
+        self.criterion = self.experiment.get_criterion(self.stage)
+        self.optimizer = self.experiment.get_optimizer(self.stage, self.model)
+        self.scheduler = self.experiment.get_scheduler(
+            self.stage, self.optimizer
+        )
+        self.callbacks = self.experiment.get_callbacks(self.stage)
+
+    def on_epoch_start(self, runner: "IRunner"):
+        assert self.loaders is not None
+        for loader_key, loader in self.loaders.items():
+            if len(loader) == 0:
+                raise NotImplementedError(
+                    f"DataLoader with name {loader_key} is empty."
+                )
+        self.global_epoch += 1
+        self.stage_epoch += 1
+        self.epoch_metrics: Dict = defaultdict(None)
+
+    def on_loader_start(self, runner: "IRunner"):
+        assert self.loader is not None
+        self.loader_len = len(self.loader)
+        if self.loader_len == 0:
+            raise NotImplementedError(
+                f"DataLoader with name {self.loader_key} is empty."
+            )
+        self.loader_sample_step = 0
+        self.loader_batch_step = 0
+        self.is_train_loader = self.loader_key.startswith("train")
+        self.is_valid_loader = self.loader_key.startswith("valid")
+        self.is_infer_loader = self.loader_key.startswith("infer")
+        self.loader_metrics: Dict = defaultdict(None)
+
+    def on_batch_start(self, runner: "IRunner"):
+        self.batch_size = len(self.input[0])
+        self.global_batch_step += 1
+        self.loader_batch_step += 1
+        self.global_sample_step += self.batch_size
+        self.loader_sample_step += self.batch_size
+        self.batch_metrics: Dict = defaultdict(None)
+
+    def on_batch_end(self, runner: "IRunner"):
+        # @TODO: do we need to log metics here?
+        # self.log_metrics(metrics=self.batch_metrics, step=self.global_sample_step)
+        pass
+
+    def on_loader_end(self, runner: "IRunner"):
+        pass
+
+    def on_epoch_end(self, runner: "IRunner"):
+        # @TODO: do we need to log metics here?
+        # self.log_metrics(metrics=self.epoch_metrics, step=self.global_epoch)
+        pass
+
+    def on_stage_end(self, runner: "IRunner"):
+        pass
+
+    def on_experiment_end(self, runner: "IRunner"):
+        pass
+
+    def on_exception(self, runner: "IRunner"):
+        raise self.exception
+
+    def _run_event(self, event: str) -> None:
+        if _is_substring(event, ("start", "exception")):
+            getattr(self, event)(self)
+        for callback in self.callbacks.values():
+            getattr(callback, event)(self)
+        if _is_substring(event, ("end",)):
+            getattr(self, event)(self)
 
     def _handle_batch(self, batch):
         raise NotImplementedError()
 
-    def _prepare_for_stage(self, stage):
-        set_random_seed()
-        self.loaders = self.experiment.get_loaders(stage)
-        self.model = self.experiment.get_model(stage)
-        self.criterion = self.experiment.get_criterion(stage)
-        self.optimizer = self.experiment.get_optimizer(stage, self.model)
-        self.scheduler = self.experiment.get_scheduler(stage, self.optimizer)
-        self.callbacks = self.experiment.get_callbacks(stage)
-        for k, v in self.experiment.get_stage_params(stage).items():
-            setattr(self, k, v)
+    def _run_batch(self) -> None:
+        # self.input = self._handle_device(batch=self.input)
+        self._run_event("on_batch_start")
+        self._handle_batch(batch=self.input)
+        self._run_event("on_batch_end")
 
-    def _run_event(self, event: str) -> None:
-        for callback in self.callbacks:
-            getattr(callback, event)(self)
+    def _run_loader(self) -> None:
+        self._run_event("on_loader_start")
+        for self.loader_batch_step, self.input in enumerate(self.loader):
+            self._run_batch()
+            if self.need_early_stop:
+                # @TODO: do we need extra event for early stop?
+                self.need_early_stop = False
+                break
+        self._run_event("on_loader_end")
 
-    def run_experiment(self, experiment):
-        self.experiment = experiment
+    def _run_epoch(self) -> None:
+        self._run_event("on_epoch_start")
+        for self.loader_key, self.loader in self.loaders.items():
+            self._run_loader()
+        self._run_event("on_epoch_end")
 
-        for stage in self.experiment.stages:
-            self._prepare_for_stage(stage)
-            self._run_event("on_stage_start")
+    def _run_stage(self) -> None:
+        self._run_event("on_stage_start")
+        while self.stage_epoch < self.stage_len + 1:
+            self._run_epoch()
+            if self.need_early_stop:
+                # @TODO: do we need extra event for early stop?
+                self.need_early_stop = False
+                break
+        self._run_event("on_stage_end")
 
-            for self.epoch in range(self.num_epochs):
-                self._run_event("on_epoch_start")
+    def _run_experiment(self) -> None:
+        self._run_event("on_experiment_start")
+        for self.stage in self.experiment.stages:
+            self._run_stage()
+        self._run_event("on_experiment_end")
 
-                for self.loader_name, loader in self.loaders.items():
-                    self.loader_metrics = defaultdict(lambda: [])
-                    self.is_train_loader = self.loader_name.startswith("train")
-                    self._run_event("on_loader_start")
-                    loader = tqdm(loader) if self.verbose else loader
-
-                    for batch in loader:
-                        self._run_event("on_batch_start")
-                        self._handle_batch(batch)
-                        self._run_event("on_batch_end")
-
-                    self._run_event("on_loader_end")
-                self._run_event("on_epoch_end")
-            self._run_event("on_stage_end")
+    def run_experiment(self, experiment: IExperiment = None) -> "IRunner":
+        self.experiment = experiment or self.experiment
+        try:
+            self._run_experiment()
+        except (Exception, KeyboardInterrupt) as ex:
+            self.exception = ex
+            self._run_event("on_exception")
+        return self
 
 
 class SupervisedRunner(IRunner):
