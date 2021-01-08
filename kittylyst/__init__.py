@@ -17,6 +17,8 @@ from kittylyst.callback import (
     OptimizerCallback,
     SchedulerCallback,
     VerboseCallback,
+IMetricHandlerCallback,
+TopNMetricHandlerCallback,
 )
 from kittylyst.experiment import IExperiment, SingleStageExperiment
 from kittylyst.runner import IRunner, SupervisedRunner

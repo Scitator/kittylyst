@@ -1,13 +1,11 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 from collections import defaultdict
 from functools import lru_cache
-
-import numpy as np
 
 from kittylyst.callback import ICallback
 from kittylyst.experiment import IExperiment
 from kittylyst.logger import ILogger
-from kittylyst.misc import format_metrics, set_random_seed, unvalue
+from kittylyst.misc import set_random_seed
 
 
 @lru_cache(maxsize=42)
@@ -161,8 +159,6 @@ class IRunner(ICallback, ILogger):
             step=self.global_batch_step,
             scope="global_batch",
         )
-        # for k, v in self.batch_metrics.items():
-        #     self.loader_metrics[k].append(unvalue(v))
 
     def on_loader_end(self, runner: "IRunner"):
         # @TODO: do we need to log metrics here?
@@ -174,9 +170,6 @@ class IRunner(ICallback, ILogger):
             scope_name=self.loader_key,
         )
         self.epoch_metrics[self.loader_key] = self.loader_metrics.copy()
-        # self.epoch_metrics[self.loader_key] = {
-        #     k: np.mean(v) for k, v in self.loader_metrics.items()
-        # }
 
     def on_epoch_end(self, runner: "IRunner"):
         pass

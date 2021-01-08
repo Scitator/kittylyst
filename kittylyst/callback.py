@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+from abc import ABC, abstractmethod
 
 from tqdm.auto import tqdm
 
@@ -109,3 +110,72 @@ class SchedulerCallback(ICallback):
 class VerboseCallback(ICallback):
     def on_loader_start(self, runner: "IRunner") -> None:
         runner.loader = tqdm(runner.loader)
+
+
+class IMetricHandlerCallback(ABC, ICallback):
+    def __init__(
+        self,
+        loader_key: str,
+        metric_key: str,
+        minimize: bool = True,
+        min_delta: float = 1e-6,
+    ):
+        self.loader_key = loader_key
+        self.metric_key = metric_key
+        self.minimize = minimize
+        self.best_score = None
+
+        if minimize:
+            self.is_better = lambda score, best: score <= (best - min_delta)
+        else:
+            self.is_better = lambda score, best: score >= (best + min_delta)
+
+    @abstractmethod
+    def handle(self, runner: "IRunner"):
+        pass
+
+    def on_epoch_end(self, runner: "IRunner") -> None:
+        score = runner.epoch_metrics[self.loader_key][self.metric_key]
+        if self.best_score is None or self.is_better(score, self.best_score):
+            self.best_score = score
+            self.handle(runner=runner)
+
+
+class TopNMetricHandlerCallback(IMetricHandlerCallback):
+    def __init__(
+        self,
+        loader_key: str,
+        metric_key: str,
+        minimize: bool = True,
+        min_delta: float = 1e-6,
+        save_n_best: int = 1,
+    ):
+        super().__init__(
+            loader_key=loader_key,
+            metric_key=metric_key,
+            minimize=minimize,
+            min_delta=min_delta,
+        )
+        self.save_n_best = save_n_best
+        self.top_best_metrics = []
+
+    def handle(self, runner: "IRunner"):
+        self.top_best_metrics.append((self.best_score, runner.stage_epoch,))
+
+        self.top_best_metrics = sorted(
+            self.top_best_metrics,
+            key=lambda x: x[0],
+            reverse=not self.minimize,
+        )
+        if len(self.top_best_metrics) > self.save_n_best:
+            self.top_best_metrics.pop(-1)
+
+    def on_stage_end(self, runner: "IRunner") -> None:
+        log_message = "Top-N best epochs:\n"
+        log_message += "\n".join(
+            [
+                "{epoch}\t{metric:3.4f}".format(epoch=epoch, metric=metric)
+                for metric, epoch in self.top_best_metrics
+            ]
+        )
+        print(log_message)
