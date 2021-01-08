@@ -64,9 +64,12 @@ class MetricCallback(ICallback):
         self.metric.reset()
 
     def on_batch_end(self, runner: "IRunner") -> None:
-        # @TODO: here should be some engine stuff with tensor sync?
+        # @TODO: do we need to sync tensors here?
         inputs = runner.output[self.output_key]
         targets = runner.input[self.input_key]
+        inputs = runner.engine.sync_tensor(inputs)
+        targets = runner.engine.sync_tensor(targets)
+
         self.metric.update(inputs, targets)
         if self.compute_on_batch:
             runner.batch_metrics.update(self.metric.compute_key_value())
@@ -84,7 +87,11 @@ class CriterionCallback(ICallback):
         self.average_metric.reset()
 
     def on_batch_end(self, runner: "IRunner"):
+        # @TODO: do we need to sync tensors here?
         logits, targets = runner.output["logits"], runner.input["targets"]
+        logits = runner.engine.sync_tensor(logits)
+        targets = runner.engine.sync_tensor(targets)
+
         loss = runner.criterion(logits, targets)
         l2_loss = self.alpha * sum((p * p for p in runner.model.parameters()))
         loss = loss + l2_loss
@@ -105,9 +112,9 @@ class OptimizerCallback(ICallback):
 
     def on_batch_end(self, runner: "IRunner"):
         if runner.is_train_loader:
-            runner.model.zero_grad()
+            runner.engine.zero_grad(runner.model, runner.optimizer)
             runner.batch_metrics[self.metric_key].backward()
-            runner.optimizer.step()
+            runner.engine.optimizer_step(runner.model, runner.optimizer)
 
 
 class SchedulerCallback(ICallback):
@@ -187,3 +194,28 @@ class TopNMetricHandlerCallback(IMetricHandlerCallback):
             ]
         )
         print(log_message)
+
+
+class CheckpointCallback(TopNMetricHandlerCallback):
+    def handle(self, runner: "IRunner"):
+        # @TODO: here is very simplified logic
+        super().handle(runner=runner)
+        checkpoint = runner.engine.pack_checkpoint(
+            model=runner.model,
+            criterion=runner.criterion,
+            optimizer=runner.optimizer,
+            scheduler=runner.scheduler,
+        )
+        runner.engine.save_checkpoint(checkpoint, "./logpath.pth")
+
+    def on_stage_end(self, runner: "IRunner") -> None:
+        # @TODO: here is very simplified logic
+        super().on_stage_end(runner=runner)
+        checkpoint = runner.engine.load_checkpoint("./logpath.pth")
+        runner.engine.unpack_checkpoint(
+            checkpoint=checkpoint,
+            model=runner.model,
+            criterion=runner.criterion,
+            optimizer=runner.optimizer,
+            scheduler=runner.scheduler,
+        )

@@ -1,8 +1,9 @@
 from typing import Any, Dict, Tuple
 from collections import defaultdict
-from functools import lru_cache
+from functools import lru_cache, partial
 
 from kittylyst.callback import ICallback
+from kittylyst.engine import Engine, IEngine
 from kittylyst.experiment import IExperiment
 from kittylyst.logger import ILogger
 from kittylyst.misc import set_random_seed
@@ -21,10 +22,13 @@ class IRunner(ICallback, ILogger):
     """
 
     def __init__(
-        self, engine=None, model=None, experiment: IExperiment = None
+        self,
+        engine: IEngine = None,
+        model=None,
+        experiment: IExperiment = None,
     ):
         # main
-        self.engine = engine
+        self.engine: IEngine = engine
         self.model = model
         self.experiment: IExperiment = experiment
         # the data
@@ -107,12 +111,26 @@ class IRunner(ICallback, ILogger):
         # some custom logic is possible here
         set_random_seed(self.experiment.seed + self.global_epoch)
         self.loaders = self.experiment.get_data(self.stage)
-        self.model = self.experiment.get_model(self.stage)
-        self.criterion = self.experiment.get_criterion(self.stage)
-        self.optimizer = self.experiment.get_optimizer(self.stage, self.model)
-        self.scheduler = self.experiment.get_scheduler(
-            self.stage, self.optimizer
+
+        # @TODO: we need better approach here
+        (
+            self.model,
+            self.criterion,
+            self.optimizer,
+            self.scheduler,
+        ) = self.engine.init_components(
+            model_fn=partial(self.experiment.get_model, stage=self.stage),
+            criterion_fn=partial(
+                self.experiment.get_criterion, stage=self.stage
+            ),
+            optimizer_fn=partial(
+                self.experiment.get_optimizer, stage=self.stage
+            ),
+            scheduler_fn=partial(
+                self.experiment.get_scheduler, stage=self.stage
+            ),
         )
+
         self.callbacks = self.experiment.get_callbacks(self.stage)
 
     def on_epoch_start(self, runner: "IRunner"):
@@ -247,6 +265,8 @@ class IRunner(ICallback, ILogger):
         self._run_event("on_experiment_end")
 
     def run_experiment(self, experiment: IExperiment = None) -> "IRunner":
+        # @TODO: where should we init it?
+        self.engine = Engine()
         self.experiment = experiment or self.experiment
         try:
             self._run_experiment()

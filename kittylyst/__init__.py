@@ -19,6 +19,7 @@ from kittylyst.callback import (
     VerboseCallback,
     IMetricHandlerCallback,
     TopNMetricHandlerCallback,
+    CheckpointCallback,
 )
 from kittylyst.experiment import IExperiment, SingleStageExperiment
 from kittylyst.runner import IRunner, SupervisedRunner
