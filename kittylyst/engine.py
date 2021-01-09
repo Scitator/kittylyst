@@ -117,6 +117,7 @@ class Engine(IEngine):
         criterion = criterion_fn()
         optimizer = optimizer_fn(model=model)
         scheduler = scheduler_fn(optimizer=optimizer)
+        # @TODO: `sync_device` with the components
         return model, criterion, optimizer, scheduler
 
     def deinit_components(self):
@@ -165,3 +166,7 @@ class Engine(IEngine):
 
     def optimizer_step(self, model, optimizer) -> None:
         optimizer.step()
+
+
+def get_engine_by_params(engine_params: Dict):
+    return Engine()

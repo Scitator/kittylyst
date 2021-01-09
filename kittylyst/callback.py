@@ -119,7 +119,7 @@ class OptimizerCallback(ICallback):
 
 class SchedulerCallback(ICallback):
     def on_epoch_end(self, runner: "IRunner"):
-        runner.scheduler.step(runner.stage_epoch)
+        runner.scheduler.step(runner.stage_epoch_step)
 
 
 class VerboseCallback(ICallback):
@@ -175,7 +175,9 @@ class TopNMetricHandlerCallback(IMetricHandlerCallback):
         self.top_best_metrics = []
 
     def handle(self, runner: "IRunner"):
-        self.top_best_metrics.append((self.best_score, runner.stage_epoch,))
+        self.top_best_metrics.append(
+            (self.best_score, runner.stage_epoch_step,)
+        )
 
         self.top_best_metrics = sorted(
             self.top_best_metrics,

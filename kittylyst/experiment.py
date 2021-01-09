@@ -1,7 +1,9 @@
 from typing import Any, Dict, List
 
 from kittylyst.callback import ICallback
+from kittylyst.engine import Engine, IEngine
 from kittylyst.logger import ILogger
+from kittylyst.trial import ITrial, Trial
 
 
 class IExperiment:
@@ -13,21 +15,16 @@ class IExperiment:
     """
 
     @property
-    def seed(self) -> 42:
+    def seed(self) -> int:
         return 42
 
     @property
+    def name(self) -> str:
+        # @TODO: auto-generate name?
+        return "experiment"
+
+    @property
     def hparams(self) -> Dict:
-        return {}
-
-    @property
-    def engine_params(self) -> Dict:
-        # @TODO what to do with these three?
-        return {}
-
-    @property
-    def trial_params(self) -> Dict:
-        # @TODO what to do with these three?
         return {}
 
     @property
@@ -55,6 +52,14 @@ class IExperiment:
     def get_callbacks(self, stage: str) -> Dict[str, ICallback]:
         return {}
 
+    def get_engine(self) -> IEngine:
+        # @TODO what to do with these three?
+        return None
+
+    def get_trial(self) -> ITrial:
+        # @TODO what to do with these three?
+        return None
+
     def get_loggers(self) -> Dict[str, ILogger]:
         # @TODO what to do with these three?
         return {}
@@ -70,6 +75,8 @@ class SingleStageExperiment(IExperiment):
         criterion=None,
         optimizer=None,
         scheduler=None,
+        engine=None,
+        trial=None,
         stage: str = "train",
         num_epochs: int = 1,
     ):
@@ -80,6 +87,8 @@ class SingleStageExperiment(IExperiment):
         self._scheduler = scheduler
         self._callbacks = callbacks or {}
         self._loggers = loggers or {}
+        self._engine = engine or Engine()
+        self._trial = trial or Trial()
 
         self._stage = stage
         self._num_epochs = num_epochs
@@ -111,3 +120,9 @@ class SingleStageExperiment(IExperiment):
 
     def get_loggers(self) -> Dict[str, ILogger]:
         return self._loggers
+
+    def get_engine(self) -> IEngine:
+        return self._engine
+
+    def get_trial(self) -> ITrial:
+        return self._trial

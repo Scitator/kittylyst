@@ -1,7 +1,10 @@
-from typing import Dict
+from typing import Dict, List, Union
+import json
+from pathlib import Path
 import random
 
 import numpy as np
+import yaml
 
 from micrograd.engine import Value
 
@@ -17,6 +20,34 @@ def unvalue(value):
 
 def format_metrics(dct: Dict):
     return " ".join([f"{k}: {unvalue(dct[k])}" for k in sorted(dct.keys())])
+
+
+def save_config(
+    config: Union[Dict, List],
+    path: Union[str, Path],
+    data_format: str = None,
+    encoding: str = "utf-8",
+    ensure_ascii: bool = False,
+    indent: int = 2,
+) -> None:
+    path = Path(path)
+
+    if data_format is not None:
+        suffix = data_format
+    else:
+        suffix = path.suffix
+
+    assert suffix in [
+        ".json",
+        ".yml",
+        ".yaml",
+    ], f"Unknown file format '{suffix}'"
+
+    with path.open(encoding=encoding, mode="w") as stream:
+        if suffix == ".json":
+            json.dump(config, stream, indent=indent, ensure_ascii=ensure_ascii)
+        elif suffix in [".yml", ".yaml"]:
+            yaml.dump(config, stream)
 
 
 class MicroLoader:

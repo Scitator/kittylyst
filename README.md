@@ -51,7 +51,7 @@ experiment = kt.Experiment(
     verbose=True,
 )
 
-kt.SupervisedRunner().run_experiment(experiment)
+kt.SupervisedRunner().run(experiment)
 ```
 
 ### Running an experiment
