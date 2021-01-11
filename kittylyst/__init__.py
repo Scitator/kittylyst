@@ -23,6 +23,7 @@ from kittylyst.callback import (
     IMetricHandlerCallback,
     TopNMetricHandlerCallback,
     CheckpointCallback,
+    OptunaPruningCallback,
 )
 from kittylyst.experiment import IExperiment, SingleStageExperiment
 from kittylyst.runner import IRunner, SupervisedRunner

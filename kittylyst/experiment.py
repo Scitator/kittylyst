@@ -79,6 +79,7 @@ class SingleStageExperiment(IExperiment):
         trial=None,
         stage: str = "train",
         num_epochs: int = 1,
+        hparams: Dict = None,
     ):
         self._loaders = loaders
         self._model = model
@@ -92,6 +93,19 @@ class SingleStageExperiment(IExperiment):
 
         self._stage = stage
         self._num_epochs = num_epochs
+        self._hparams = hparams
+
+    @property
+    def name(self) -> str:
+        return (
+            "experiment"
+            if self._trial is None
+            else f"experiment_{self._trial.number}"
+        )
+
+    @property
+    def hparams(self) -> Dict:
+        return self._hparams or self._trial.params or {}
 
     @property
     def stages(self) -> List[str]:

@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
 
+import optuna
 from tqdm.auto import tqdm
 
 from kittylyst.metric import AverageMetric, IMetric
@@ -106,9 +107,8 @@ class CriterionCallback(ICallback):
 
 
 class OptimizerCallback(ICallback):
-    def __init__(self, metric_key: str = "loss", alpha: float = 1e-4):
+    def __init__(self, metric_key: str = "loss"):
         self.metric_key = metric_key
-        self.alpha = alpha
 
     def on_batch_end(self, runner: "IRunner"):
         if runner.is_train_loader:
@@ -221,3 +221,35 @@ class CheckpointCallback(TopNMetricHandlerCallback):
             optimizer=runner.optimizer,
             scheduler=runner.scheduler,
         )
+
+
+# Should it be ICallback, *ILogger* or ITrial?
+class OptunaPruningCallback(ICallback):
+    def __init__(
+        self, loader_key: str, metric_key: str, trial: optuna.Trial = None
+    ):
+        super().__init__()
+        self.loader_key = loader_key
+        self.metric_key = metric_key
+        self.trial = trial
+
+    def on_stage_start(self, runner: "IRunner"):
+        trial = runner.trial
+        if (
+            self.trial is None
+            and trial is not None
+            and isinstance(trial, optuna.Trial)
+        ):
+            self.trial = trial
+
+        if self.trial is None:
+            raise NotImplementedError("No Optuna trial found for logging")
+
+    def on_epoch_end(self, runner: "IRunner"):
+        metric_value = runner.epoch_metrics[self.loader_key][self.metric_key]
+        self.trial.report(metric_value, step=runner.stage_epoch_step)
+        if self.trial.should_prune():
+            message = "Trial was pruned at epoch {}.".format(
+                runner.stage_epoch_step
+            )
+            raise optuna.TrialPruned(message)
