@@ -48,8 +48,9 @@ class IRunner(ICallback, ILogger):
         # the dataflow - model input, model output
         # @TODO: could we make just self.batch_tensors ?
         # to store input and output?
-        self.input = None
-        self.output = None
+        # self.input = None
+        # self.output = None
+        self.batch = None
 
         # @TODO: do we need to store metrics under Runner?
         # metrics flow - batch, loader and epoch metrics
@@ -217,7 +218,7 @@ class IRunner(ICallback, ILogger):
         self.loader_metrics: Dict = defaultdict(lambda: [])
 
     def on_batch_start(self, runner: "IRunner"):
-        self.batch_size = len(self.input[0])
+        self.batch_size = len(self.batch[0])
         self.global_batch_step += 1
         self.loader_batch_step += 1
         self.global_sample_step += self.batch_size
@@ -262,14 +263,14 @@ class IRunner(ICallback, ILogger):
         raise NotImplementedError()
 
     def _run_batch(self) -> None:
-        self.input = self.engine.sync_device(tensor_or_module=self.input)
+        self.batch = self.engine.sync_device(tensor_or_module=self.batch)
         self._run_event("on_batch_start")
-        self._handle_batch(batch=self.input)
+        self._handle_batch(batch=self.batch)
         self._run_event("on_batch_end")
 
     def _run_loader(self) -> None:
         self._run_event("on_loader_start")
-        for self.loader_batch_step, self.input in enumerate(self.loader):
+        for self.loader_batch_step, self.batch in enumerate(self.loader):
             self._run_batch()
             if self.need_early_stop:
                 self.need_early_stop = False
@@ -317,5 +318,6 @@ class SupervisedRunner(IRunner):
     def _handle_batch(self, batch):
         features, targets = batch
         logits = list(map(self.model, features))
-        self.input = {"features": features, "targets": targets}
-        self.output = {"logits": logits}
+        # self.input = {"features": features, "targets": targets}
+        # self.output = {"logits": logits}
+        self.batch = {"features": features, "targets": targets, "logits": logits}

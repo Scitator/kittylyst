@@ -67,8 +67,8 @@ class MetricCallback(ICallback):
 
     def on_batch_end(self, runner: "IRunner") -> None:
         # @TODO: do we need to sync tensors here?
-        inputs = runner.output[self.output_key]
-        targets = runner.input[self.input_key]
+        inputs = runner.batch[self.output_key]
+        targets = runner.batch[self.input_key]
         inputs = runner.engine.sync_tensor(inputs)
         targets = runner.engine.sync_tensor(targets)
 
@@ -90,7 +90,7 @@ class CriterionCallback(ICallback):
 
     def on_batch_end(self, runner: "IRunner"):
         # @TODO: do we need to sync tensors here?
-        logits, targets = runner.output["logits"], runner.input["targets"]
+        logits, targets = runner.batch["logits"], runner.batch["targets"]
         logits = runner.engine.sync_tensor(logits)
         targets = runner.engine.sync_tensor(targets)
 
