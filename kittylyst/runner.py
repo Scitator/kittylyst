@@ -251,7 +251,7 @@ class IRunner(ICallback, ILogger):
         raise self.exception
 
     def _run_event(self, event: str) -> None:
-        if _is_substring(event, ("start", )):
+        if _is_substring(event, ("start",)):
             getattr(self, event)(self)
         for callback in self.callbacks.values():
             getattr(callback, event)(self)

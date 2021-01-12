@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
+import sys
 
 import optuna
 from tqdm.auto import tqdm
@@ -123,9 +124,41 @@ class SchedulerCallback(ICallback):
 
 
 # Should it be ICallback or *ILogger*?
+# class VerboseCallback(ICallback):
+#     def on_loader_start(self, runner: "IRunner") -> None:
+#         runner.loader = tqdm(runner.loader)
+
+
 class VerboseCallback(ICallback):
-    def on_loader_start(self, runner: "IRunner") -> None:
-        runner.loader = tqdm(runner.loader)
+    def __init__(self):
+        super().__init__()
+        self.tqdm: tqdm = None
+
+    def on_loader_start(self, runner: "IRunner"):
+        self.tqdm = tqdm(
+            total=runner.loader_batch_len,
+            desc=f"{runner.stage_epoch_step}/{runner.stage_epoch_len}"
+            f" * Epoch ({runner.loader_key})",
+            # leave=True,
+            # ncols=0,
+            # file=sys.stdout,
+        )
+
+    def on_batch_end(self, runner: "IRunner"):
+        self.tqdm.set_postfix(
+            **{
+                k: "{:3.3f}".format(unvalue(v))
+                if unvalue(v) > 1e-3
+                else "{:1.3e}".format(unvalue(v))
+                for k, v in sorted(runner.batch_metrics.items())
+            }
+        )
+        self.tqdm.update()
+
+    def on_loader_end(self, runner: "IRunner"):
+        self.tqdm.clear()
+        self.tqdm.close()
+        self.tqdm = None
 
 
 class IMetricHandlerCallback(ABC, ICallback):
