@@ -122,6 +122,7 @@ class SchedulerCallback(ICallback):
         runner.scheduler.step(runner.stage_epoch_step)
 
 
+# Should it be ICallback or *ILogger*?
 class VerboseCallback(ICallback):
     def on_loader_start(self, runner: "IRunner") -> None:
         runner.loader = tqdm(runner.loader)

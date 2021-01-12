@@ -86,10 +86,10 @@ class SingleStageExperiment(IExperiment):
         self._criterion = criterion
         self._optimizer = optimizer
         self._scheduler = scheduler
-        self._callbacks = callbacks or {}
-        self._loggers = loggers or {}
-        self._engine = engine or Engine()
-        self._trial = trial or Trial()
+        self._callbacks = callbacks
+        self._loggers = loggers
+        self._engine = engine
+        self._trial = trial
 
         self._stage = stage
         self._num_epochs = num_epochs
@@ -105,7 +105,11 @@ class SingleStageExperiment(IExperiment):
 
     @property
     def hparams(self) -> Dict:
-        return self._hparams or self._trial.params or {}
+        if self._hparams is not None:
+            return self._hparams
+        if self._trial is not None:
+            return self._trial.params
+        return {}
 
     @property
     def stages(self) -> List[str]:
@@ -130,13 +134,13 @@ class SingleStageExperiment(IExperiment):
         return self._scheduler
 
     def get_callbacks(self, stage: str) -> Dict[str, ICallback]:
-        return self._callbacks
+        return self._callbacks or {}
 
     def get_loggers(self) -> Dict[str, ILogger]:
-        return self._loggers
+        return self._loggers or {}
 
     def get_engine(self) -> IEngine:
-        return self._engine
+        return self._engine or Engine()
 
     def get_trial(self) -> ITrial:
         return self._trial

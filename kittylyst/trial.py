@@ -4,6 +4,7 @@ from abc import ABC
 
 # @TODO: do we really need it?
 # @TODO: or ILogger is good enough?
+# optuna, ray, hyperopt
 class ITrial(ABC):
     """
     An abstraction that syncs experiment run with
@@ -13,6 +14,7 @@ class ITrial(ABC):
     pass
 
 
+# could it be a Union[supported trials?]
 class Trial(ITrial):
     pass
 

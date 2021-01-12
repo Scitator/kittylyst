@@ -64,8 +64,6 @@ class IRunner(ICallback, ILogger):
         self.global_sample_step: int = 0
         self.global_batch_step: int = 0
         self.global_epoch_step: int = 0
-        self.need_early_stop: bool = False
-        # self.need_exception_reraise: bool = True
 
         # stage info
         self.stage_key: str = "infer"
@@ -88,6 +86,8 @@ class IRunner(ICallback, ILogger):
 
         # extra
         self.exception: Exception = None
+        self.need_early_stop: bool = False
+        # self.need_exception_reraise: bool = True
 
     def log_metrics(self, *args, **kwargs) -> None:
         for logger in self.loggers.values():
@@ -251,11 +251,11 @@ class IRunner(ICallback, ILogger):
         raise self.exception
 
     def _run_event(self, event: str) -> None:
-        if _is_substring(event, ("start", "exception")):
+        if _is_substring(event, ("start", )):
             getattr(self, event)(self)
         for callback in self.callbacks.values():
             getattr(callback, event)(self)
-        if _is_substring(event, ("end",)):
+        if _is_substring(event, ("end", "exception")):
             getattr(self, event)(self)
 
     def _handle_batch(self, batch):

@@ -84,7 +84,6 @@ class IEngine(ABC):
     @abstractmethod
     def zero_grad(self, model, optimizer) -> None:
         pass
-        model.zero_grad()
 
     @abstractmethod
     def optimizer_step(self, model, optimizer) -> None:
