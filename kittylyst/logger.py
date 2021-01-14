@@ -18,13 +18,15 @@ class ILogger(ABC):
         scope: str = None,
         # experiment info
         experiment_key: str = None,
-        global_sample_step: int = 0,
-        global_batch_step: int = 0,
         global_epoch_step: int = 0,
+        global_batch_step: int = 0,
+        global_sample_step: int = 0,
         # stage info
-        stage_key: str = "infer",
+        stage_key: str = None,
         stage_epoch_len: int = 0,
         stage_epoch_step: int = 0,
+        stage_batch_step: int = 0,
+        stage_sample_step: int = 0,
         # loader info
         loader_key: str = None,
         loader_batch_len: int = 0,
@@ -40,13 +42,15 @@ class ILogger(ABC):
         scope: str = None,
         # experiment info
         experiment_key: str = None,
-        global_sample_step: int = 0,
-        global_batch_step: int = 0,
         global_epoch_step: int = 0,
+        global_batch_step: int = 0,
+        global_sample_step: int = 0,
         # stage info
-        stage_key: str = "infer",
-        stage_len: int = 0,
+        stage_key: str = None,
+        stage_epoch_len: int = 0,
         stage_epoch_step: int = 0,
+        stage_batch_step: int = 0,
+        stage_sample_step: int = 0,
         # loader info
         loader_key: str = None,
         loader_batch_len: int = 0,
@@ -66,11 +70,11 @@ class ILogger(ABC):
         pass
 
     @abstractmethod
-    def flush(self) -> None:
+    def flush_log(self) -> None:
         pass
 
     @abstractmethod
-    def close(self) -> None:
+    def close_log(self) -> None:
         pass
 
 
@@ -87,13 +91,15 @@ class ConsoleLogger(ILogger):
         scope: str = None,
         # experiment info
         experiment_key: str = None,
-        global_sample_step: int = 0,
-        global_batch_step: int = 0,
         global_epoch_step: int = 0,
+        global_batch_step: int = 0,
+        global_sample_step: int = 0,
         # stage info
-        stage_key: str = "infer",
+        stage_key: str = None,
         stage_epoch_len: int = 0,
         stage_epoch_step: int = 0,
+        stage_batch_step: int = 0,
+        stage_sample_step: int = 0,
         # loader info
         loader_key: str = None,
         loader_batch_len: int = 0,
@@ -116,13 +122,15 @@ class ConsoleLogger(ILogger):
         scope: str = None,
         # experiment info
         experiment_key: str = None,
-        global_sample_step: int = 0,
-        global_batch_step: int = 0,
         global_epoch_step: int = 0,
+        global_batch_step: int = 0,
+        global_sample_step: int = 0,
         # stage info
-        stage_key: str = "infer",
-        stage_len: int = 0,
+        stage_key: str = None,
+        stage_epoch_len: int = 0,
         stage_epoch_step: int = 0,
+        stage_batch_step: int = 0,
+        stage_sample_step: int = 0,
         # loader info
         loader_key: str = None,
         loader_batch_len: int = 0,
@@ -140,10 +148,10 @@ class ConsoleLogger(ILogger):
     ) -> None:
         print(f"Hparams ({experiment_key}): {hparams}")
 
-    def flush(self) -> None:
+    def flush_log(self) -> None:
         pass
 
-    def close(self) -> None:
+    def close_log(self) -> None:
         pass
 
 
@@ -181,13 +189,15 @@ class LogdirLogger(ILogger):
         scope: str = None,
         # experiment info
         experiment_key: str = None,
-        global_sample_step: int = 0,
-        global_batch_step: int = 0,
         global_epoch_step: int = 0,
+        global_batch_step: int = 0,
+        global_sample_step: int = 0,
         # stage info
-        stage_key: str = "infer",
+        stage_key: str = None,
         stage_epoch_len: int = 0,
         stage_epoch_step: int = 0,
+        stage_batch_step: int = 0,
+        stage_sample_step: int = 0,
         # loader info
         loader_key: str = None,
         loader_batch_len: int = 0,
@@ -215,13 +225,15 @@ class LogdirLogger(ILogger):
         scope: str = None,
         # experiment info
         experiment_key: str = None,
-        global_sample_step: int = 0,
-        global_batch_step: int = 0,
         global_epoch_step: int = 0,
+        global_batch_step: int = 0,
+        global_sample_step: int = 0,
         # stage info
-        stage_key: str = "infer",
-        stage_len: int = 0,
+        stage_key: str = None,
+        stage_epoch_len: int = 0,
         stage_epoch_step: int = 0,
+        stage_batch_step: int = 0,
+        stage_sample_step: int = 0,
         # loader info
         loader_key: str = None,
         loader_batch_len: int = 0,
@@ -247,10 +259,10 @@ class LogdirLogger(ILogger):
             config=hparams, path=os.path.join(self.logdir, "hparams.yml")
         )
 
-    def flush(self) -> None:
+    def flush_log(self) -> None:
         for logger in self.loggers.values():
             logger.flush()
 
-    def close(self) -> None:
+    def close_log(self) -> None:
         for logger in self.loggers.values():
             logger.close()

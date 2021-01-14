@@ -116,7 +116,10 @@ class SingleStageExperiment(IExperiment):
         return [self._stage]
 
     def get_stage_params(self, stage: str) -> Dict[str, Any]:
-        return {"num_epochs": self._num_epochs}
+        return {
+            "num_epochs": self._num_epochs,
+            "migrate_from_previous_stage": False,
+        }
 
     def get_data(self, stage: str) -> Dict[str, Any]:
         return self._loaders

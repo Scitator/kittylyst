@@ -26,4 +26,4 @@ from kittylyst.callback import (
     OptunaPruningCallback,
 )
 from kittylyst.experiment import IExperiment, SingleStageExperiment
-from kittylyst.runner import IRunner, SupervisedRunner
+from kittylyst.runner import IRunner, IStageBasedRunner, SupervisedRunner

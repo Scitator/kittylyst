@@ -55,33 +55,36 @@ class IRunner(ICallback, ILogger):
         # @TODO: do we need to store metrics under Runner?
         # metrics flow - batch, loader and epoch metrics
         self.batch_metrics: Dict = defaultdict(None)
-        self.loader_metrics: Dict = defaultdict(lambda: [])
+        self.loader_metrics: Dict = defaultdict(None)
         self.epoch_metrics: Dict = defaultdict(None)
         # self.stage_metrics: Dict = defaultdict(None)
         # self.experiment_metrics: Dict = defaultdict(None)
 
         # experiment info
         self.experiment_key: str = None
-        self.global_sample_step: int = 0
-        self.global_batch_step: int = 0
         self.global_epoch_step: int = 0
+        self.global_batch_step: int = 0
+        self.global_sample_step: int = 0
 
         # stage info
         self.stage_key: str = "infer"
+        self.is_infer_stage: bool = self.stage_key.startswith("infer")
         self.stage_epoch_len: int = 0
         self.stage_epoch_step: int = 0
-        # @TODO: stage batch, sample step? do we need them?
-        self.is_infer_stage: bool = self.stage_key.startswith("infer")
+        self.stage_batch_step: int = 0
+        self.stage_sample_step: int = 0
+
         # loader info
         self.loader = None
         self.loader_key: str = None
-        self.loader_batch_len: int = 0
-        self.loader_batch_step: int = 0
-        self.loader_sample_step: int = 0
-        self.loader_batch_size = 0
         self.is_train_loader: bool = False
         self.is_valid_loader: bool = False
         self.is_infer_loader: bool = True
+        self.loader_batch_size: int = 0
+        self.loader_batch_len: int = 0
+        self.loader_batch_step: int = 0
+        self.loader_sample_step: int = 0
+
         # batch info
         self.batch_size: int = 0
 
@@ -104,6 +107,8 @@ class IRunner(ICallback, ILogger):
                 stage_key=self.stage_key,
                 stage_epoch_len=self.stage_epoch_len,
                 stage_epoch_step=self.stage_epoch_step,
+                stage_batch_step=self.stage_batch_step,
+                stage_sample_step=self.stage_sample_step,
                 # loader info
                 loader_key=self.loader_key,
                 loader_batch_len=self.loader_batch_len,
@@ -123,8 +128,10 @@ class IRunner(ICallback, ILogger):
                 global_epoch_step=self.global_epoch_step,
                 # stage info
                 stage_key=self.stage_key,
-                stage_len=self.stage_epoch_len,
+                stage_epoch_len=self.stage_epoch_len,
                 stage_epoch_step=self.stage_epoch_step,
+                stage_batch_step=self.stage_batch_step,
+                stage_sample_step=self.stage_sample_step,
                 # loader info
                 loader_key=self.loader_key,
                 loader_batch_len=self.loader_batch_len,
@@ -141,64 +148,40 @@ class IRunner(ICallback, ILogger):
                 experiment_key=self.experiment_key,
             )
 
-    def flush(self) -> None:
+    def flush_log(self) -> None:
         for logger in self.loggers.values():
-            logger.flush()
+            logger.flush_log()
 
-    def close(self) -> None:
+    def close_log(self) -> None:
         for logger in self.loggers.values():
-            logger.close()
+            logger.close_log()
 
     def on_experiment_start(self, runner: "IRunner"):
         assert self.experiment is not None
         self.experiment_key = self.experiment.name
+        self.global_epoch_step: int = 0
+        self.global_batch_step: int = 0
+        self.global_sample_step: int = 0
         self.trial = self.experiment.get_trial()
         self.engine = self.experiment.get_engine()
         self.loggers = self.experiment.get_loggers()
         self.log_hparams(hparams=self.experiment.hparams)
         # @TODO: should we report hparams to the trial?
+        # self.experiment_metrics: Dict = defaultdict(None)
 
     def on_stage_start(self, runner: "IRunner"):
         assert self.stage_key is not None
         stage_params = self.experiment.get_stage_params(self.stage_key)
-        # @TODO: think about naming here
+        self.is_infer_stage: bool = self.stage_key.startswith("infer")
         self.stage_epoch_len = stage_params["num_epochs"]
         self.stage_epoch_step: int = 0
-        self.is_infer_stage: bool = self.stage_key.startswith("infer")
+        self.stage_batch_step: int = 0
+        self.stage_sample_step: int = 0
         # migrate_from_previous_stage = stage_params.get(...)
         # some custom logic is possible here
-
-        set_random_seed(self.experiment.seed + self.global_epoch_step)
-        self.loaders = self.experiment.get_data(self.stage_key)
-
-        # @TODO: we need a better approach here
-        (
-            self.model,
-            self.criterion,
-            self.optimizer,
-            self.scheduler,
-        ) = self.engine.init_components(
-            model_fn=partial(self.experiment.get_model, stage=self.stage_key),
-            criterion_fn=partial(
-                self.experiment.get_criterion, stage=self.stage_key
-            ),
-            optimizer_fn=partial(
-                self.experiment.get_optimizer, stage=self.stage_key
-            ),
-            scheduler_fn=partial(
-                self.experiment.get_scheduler, stage=self.stage_key
-            ),
-        )
-
-        self.callbacks = self.experiment.get_callbacks(self.stage_key)
+        # self.stage_metrics: Dict = defaultdict(None)
 
     def on_epoch_start(self, runner: "IRunner"):
-        assert self.loaders is not None
-        for loader_key, loader in self.loaders.items():
-            if len(loader) == 0:
-                raise NotImplementedError(
-                    f"DataLoader with name {loader_key} is empty."
-                )
         self.global_epoch_step += 1
         self.stage_epoch_step += 1
         self.epoch_metrics: Dict = defaultdict(None)
@@ -210,18 +193,22 @@ class IRunner(ICallback, ILogger):
             raise NotImplementedError(
                 f"DataLoader with name {self.loader_key} is empty."
             )
-        self.loader_sample_step = 0
-        self.loader_batch_step = 0
-        self.is_train_loader = self.loader_key.startswith("train")
-        self.is_valid_loader = self.loader_key.startswith("valid")
-        self.is_infer_loader = self.loader_key.startswith("infer")
-        self.loader_metrics: Dict = defaultdict(lambda: [])
+        self.is_train_loader: bool = self.loader_key.startswith("train")
+        self.is_valid_loader: bool = self.loader_key.startswith("valid")
+        self.is_infer_loader: bool = self.loader_key.startswith("infer")
+        self.loader_batch_size: int = 0
+        self.loader_batch_len: int = 0
+        self.loader_batch_step: int = 0
+        self.loader_sample_step: int = 0
+        self.loader_metrics: Dict = defaultdict(None)
 
     def on_batch_start(self, runner: "IRunner"):
         self.batch_size = len(self.batch[0])
         self.global_batch_step += 1
+        self.stage_batch_step += 1
         self.loader_batch_step += 1
         self.global_sample_step += self.batch_size
+        self.stage_sample_step += self.batch_size
         self.loader_sample_step += self.batch_size
         self.batch_metrics: Dict = defaultdict(None)
 
@@ -237,16 +224,18 @@ class IRunner(ICallback, ILogger):
     def on_epoch_end(self, runner: "IRunner"):
         # @TODO: do we need to log metrics here?
         self.log_metrics(metrics=self.epoch_metrics, scope="epoch")
-        self.flush()
+        # self.stage_metrics[self.stage_epoch_step] = self.epoch_metrics.copy()
+        self.flush_log()
 
     def on_stage_end(self, runner: "IRunner"):
         # self.log_metrics(metrics=self.stage_metrics, scope="stage")
+        # self.experiment_metrics[self.stage_key] = self.stage_metrics.copy()
         self.engine.deinit_components()
 
     def on_experiment_end(self, runner: "IRunner"):
         # @TODO: should we report results to the trial?
         # self.log_metrics(metrics=self.experiment_metrics, scope="experiment")
-        self.close()
+        self.close_log()
 
     def on_exception(self, runner: "IRunner"):
         raise self.exception
@@ -314,10 +303,52 @@ class IRunner(ICallback, ILogger):
         return self
 
 
-class SupervisedRunner(IRunner):
+class IStageBasedRunner(IRunner):
+    def on_stage_start(self, runner: "IRunner"):
+        super().on_stage_start(runner)
+
+        set_random_seed(self.experiment.seed + self.global_epoch_step)
+        self.loaders = self.experiment.get_data(self.stage_key)
+
+        # @TODO: we need a better approach here
+        (
+            self.model,
+            self.criterion,
+            self.optimizer,
+            self.scheduler,
+        ) = self.engine.init_components(
+            model_fn=partial(self.experiment.get_model, stage=self.stage_key),
+            criterion_fn=partial(
+                self.experiment.get_criterion, stage=self.stage_key
+            ),
+            optimizer_fn=partial(
+                self.experiment.get_optimizer, stage=self.stage_key
+            ),
+            scheduler_fn=partial(
+                self.experiment.get_scheduler, stage=self.stage_key
+            ),
+        )
+
+        self.callbacks = self.experiment.get_callbacks(self.stage_key)
+
+    def on_epoch_start(self, runner: "IRunner"):
+        super().on_epoch_start(runner)
+        assert self.loaders is not None
+        for loader_key, loader in self.loaders.items():
+            if len(loader) == 0:
+                raise NotImplementedError(
+                    f"DataLoader with name {loader_key} is empty."
+                )
+
+
+class SupervisedRunner(IStageBasedRunner):
     def _handle_batch(self, batch):
         features, targets = batch
         logits = list(map(self.model, features))
         # self.input = {"features": features, "targets": targets}
         # self.output = {"logits": logits}
-        self.batch = {"features": features, "targets": targets, "logits": logits}
+        self.batch = {
+            "features": features,
+            "targets": targets,
+            "logits": logits,
+        }
