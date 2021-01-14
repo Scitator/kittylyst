@@ -1,0 +1,108 @@
+common:
+  seed: 73
+  name: experiment73
+  hparams: {}
+
+  engine:
+    type: kittylyst.Engine
+
+  trial:
+    type: kittylyst.Trial
+
+  loggers:
+    console:
+      type: kittylyst.ConsoleLogger
+    csv:
+      type: kittylyst.LogdirLogger
+      logdir: ./logdir5
+
+stages:
+  stage1:
+    num_epochs: &stage1_num_epochs 10
+    migrate_model_from_previous_stage: n
+
+    loaders:
+      train_1:
+        type: kittylyst.MicroLoader
+        X: {type: kittylyst.tmp.get_moons_vector, seed: 42, mode: features}
+        'y': {type: kittylyst.tmp.get_moons_vector, seed: 42, mode: targets}
+      valid: &valid_loader
+        type: kittylyst.MicroLoader
+        X: {type: kittylyst.tmp.get_moons_vector, seed: 137, mode: features}
+        'y': {type: kittylyst.tmp.get_moons_vector, seed: 137, mode: targets}
+
+    model: &model
+      type: micrograd.nn.MLP
+      nin: 2
+      nouts: [16, 16, 1]
+
+    criterion: &criterion
+      type: kittylyst.MicroCriterion
+
+    optimizer: &optimizer
+      type: kittylyst.MicroOptimizer
+      lr: 0.001
+
+    scheduler: &scheduler
+      type: kittylyst.MicroScheduler
+      num_epochs: *stage1_num_epochs
+
+    callbacks:
+      criterion: &criterion_callback
+        type: kittylyst.CriterionCallback
+      accuracy:
+        type: kittylyst.MetricCallback
+        metric:
+          type: kittylyst.AccuracyMetric
+        compute_on_batch: y
+        input_key: targets
+        output_key: logits
+      optimizer: &optimizer_callback
+        type: kittylyst.OptimizerCallback
+      scheduler: &scheduler_callback
+        type: kittylyst.SchedulerCallback
+      checkpoint_accuracy: &checkpoint_callback
+        type: kittylyst.CheckpointCallback
+        loader_key: valid
+        metric_key: accuracy_mean
+        minimize: n
+        save_n_best: 1
+
+  stage2:
+    num_epochs: &stage2_num_epochs 6
+    migrate_model_from_previous_stage: y
+
+    loaders:
+      train_1:
+        type: kittylyst.MicroLoader
+        X: {type: kittylyst.tmp.get_moons_vector, seed: 1337, mode: features}
+        'y': {type: kittylyst.tmp.get_moons_vector, seed: 1337, mode: targets}
+      valid: *valid_loader
+
+    model: *model
+
+    criterion: *criterion
+
+    optimizer:
+      << : *optimizer
+      lr: 0.0001
+
+    scheduler:
+      << : *scheduler
+      num_epochs: *stage2_num_epochs
+
+    callbacks:
+      criterion: *criterion_callback
+      accuracy:
+        type: kittylyst.MetricCallback
+        metric:
+          type: kittylyst.AUCMetric
+        compute_on_batch: n
+        input_key: targets
+        output_key: logits
+      optimizer: *optimizer_callback
+      scheduler: *scheduler_callback
+      checkpoint_auc:
+        << : *checkpoint_callback
+        metric_key: auc
+        save_n_best: 3

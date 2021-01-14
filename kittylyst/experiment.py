@@ -1,5 +1,6 @@
 from typing import Any, Dict, List
 
+from kittylyst import misc
 from kittylyst.callback import ICallback
 from kittylyst.engine import Engine, IEngine
 from kittylyst.logger import ILogger
@@ -147,3 +148,76 @@ class SingleStageExperiment(IExperiment):
 
     def get_trial(self) -> ITrial:
         return self._trial
+
+
+class ConfigExperiment(IExperiment):
+    def __init__(self, config: dict):
+        self.config = config
+
+    @property
+    def seed(self) -> int:
+        return self.config["common"].get("seed", super().seed)
+
+    @property
+    def name(self) -> str:
+        return self.config["common"].get("name", super().name)
+
+    @property
+    def hparams(self) -> Dict:
+        hparams = self.config["common"].get("hparams")
+        trial_hparams = (
+            trial.params if (trial := self.get_trial()) is not None else None
+        )
+        default = super().name
+        return hparams or trial_hparams or default
+
+    @property
+    def stages(self) -> List[str]:
+        return list(self.config["stages"].keys())
+
+    def get_stage_params(self, stage: str) -> Dict[str, Any]:
+        return {
+            "num_epochs": self.config["stages"][stage]["num_epochs"],
+            "migrate_model_from_previous_stage": self.config["stages"][
+                stage
+            ].get("migrate_model_from_previous_stage", False),
+        }
+
+    def get_data(self, stage: str) -> Dict[str, Any]:
+        return {
+            name: misc.get_from_dict(params)
+            for name, params in self.config["stages"][stage]["loaders"].items()
+        }
+
+    def get_model(self, stage: str):
+        return misc.get_from_dict(self.config["stages"][stage]["model"])
+
+    def get_criterion(self, stage: str):
+        if params := self.config["stages"][stage].get("criterion"):
+            return misc.get_from_dict(params)
+
+    def get_optimizer(self, stage: str, model):
+        if params := self.config["stages"][stage].get("optimizer"):
+            return misc.get_from_dict(params, model=model)
+
+    def get_scheduler(self, stage: str, optimizer):
+        if params := self.config["stages"][stage].get("scheduler"):
+            return misc.get_from_dict(params, optimizer=optimizer)
+
+    def get_callbacks(self, stage: str) -> Dict[str, ICallback]:
+        if params := self.config["stages"][stage].get("callbacks"):
+            return {k: misc.get_from_dict(v) for k, v in params.items()}
+        return {}
+
+    def get_engine(self) -> IEngine:
+        if params := self.config["common"].get("engine"):
+            return misc.get_from_dict(params)
+
+    def get_trial(self) -> ITrial:
+        if params := self.config["common"].get("trail"):
+            return misc.get_from_dict(params)
+
+    def get_loggers(self) -> Dict[str, ILogger]:
+        if params := self.config["common"].get("loggers"):
+            return {k: misc.get_from_dict(v) for k, v in params.items()}
+        return {}
