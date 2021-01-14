@@ -93,8 +93,11 @@ class MicroOptimizer:
 class MicroScheduler:
     def __init__(self, optimizer, num_epochs):
         self.optimizer = optimizer
+        self.start_lr = self.optimizer.lr
         self.num_epochs = num_epochs
 
     def step(self, epoch):
-        learning_rate = 1.0 - 0.9 * epoch / self.num_epochs
+        learning_rate = (
+            self.start_lr - self.start_lr * 0.9 * epoch / self.num_epochs
+        )
         self.optimizer.lr = learning_rate

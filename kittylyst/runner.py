@@ -177,8 +177,6 @@ class IRunner(ICallback, ILogger):
         self.stage_epoch_step: int = 0
         self.stage_batch_step: int = 0
         self.stage_sample_step: int = 0
-        # migrate_from_previous_stage = stage_params.get(...)
-        # some custom logic is possible here
         # self.stage_metrics: Dict = defaultdict(None)
 
     def on_epoch_start(self, runner: "IRunner"):
@@ -307,6 +305,15 @@ class IStageBasedRunner(IRunner):
     def on_stage_start(self, runner: "IRunner"):
         super().on_stage_start(runner)
 
+        stage_params = self.experiment.get_stage_params(self.stage_key)
+        migrate_model_from_previous_stage = stage_params.get(
+            "migrate_model_from_previous_stage", True
+        )
+        # some custom logic is possible here
+        if self.model is not None and migrate_model_from_previous_stage:
+            model_fn = lambda: self.model
+        else:
+            model_fn = partial(self.experiment.get_model, stage=self.stage_key)
         set_random_seed(self.experiment.seed + self.global_epoch_step)
         self.loaders = self.experiment.get_data(self.stage_key)
 
@@ -317,7 +324,7 @@ class IStageBasedRunner(IRunner):
             self.optimizer,
             self.scheduler,
         ) = self.engine.init_components(
-            model_fn=partial(self.experiment.get_model, stage=self.stage_key),
+            model_fn=model_fn,
             criterion_fn=partial(
                 self.experiment.get_criterion, stage=self.stage_key
             ),

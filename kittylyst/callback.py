@@ -116,6 +116,10 @@ class OptimizerCallback(ICallback):
             runner.engine.zero_grad(runner.model, runner.optimizer)
             runner.batch_metrics[self.metric_key].backward()
             runner.engine.optimizer_step(runner.model, runner.optimizer)
+            runner.batch_metrics.update({"lr": runner.optimizer.lr})
+
+    def on_loader_end(self, runner: "IRunner") -> None:
+        runner.loader_metrics.update({"lr": runner.optimizer.lr})
 
 
 class SchedulerCallback(ICallback):
