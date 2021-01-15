@@ -82,11 +82,15 @@ class IEngine(ABC):
         pass
 
     @abstractmethod
-    def zero_grad(self, model, optimizer) -> None:
+    def zero_grad(self, model, criterion, optimizer, loss) -> None:
         pass
 
     @abstractmethod
-    def optimizer_step(self, model, optimizer) -> None:
+    def backward_loss(self, model, criterion, optimizer, loss) -> None:
+        pass
+
+    @abstractmethod
+    def optimizer_step(self, model, criterion, optimizer, loss) -> None:
         pass
 
 
@@ -112,6 +116,7 @@ class Engine(IEngine):
         optimizer_fn=None,
         scheduler_fn=None,
     ):
+        # setup backend
         model = model_fn()
         criterion = criterion_fn()
         optimizer = optimizer_fn(model=model)
@@ -120,6 +125,7 @@ class Engine(IEngine):
         return model, criterion, optimizer, scheduler
 
     def deinit_components(self):
+        # remove backend
         pass
 
     def pack_checkpoint(
@@ -160,10 +166,13 @@ class Engine(IEngine):
         print("checkpoint loaded from ", path)
         return self._checkpoint_dump
 
-    def zero_grad(self, model, optimizer) -> None:
+    def zero_grad(self, model, criterion, optimizer, loss) -> None:
         model.zero_grad()
 
-    def optimizer_step(self, model, optimizer) -> None:
+    def backward_loss(self, model, criterion, optimizer, loss) -> None:
+        loss.backward()
+
+    def optimizer_step(self, model, criterion, optimizer, loss) -> None:
         optimizer.step()
 
 

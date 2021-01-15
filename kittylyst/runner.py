@@ -1,4 +1,5 @@
 from typing import Any, Dict, Tuple
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from functools import lru_cache, partial
 
@@ -11,23 +12,19 @@ from kittylyst.trial import ITrial
 
 
 @lru_cache(maxsize=42)
-def _is_substring(origin_string: str, strings: Tuple):
+def _has_str_intersections(origin_string: str, strings: Tuple):
     return any(x in origin_string for x in strings)
 
 
-class IRunner(ICallback, ILogger):
+class IRunner(ICallback, ILogger, ABC):
     """An abstraction that knows **how** to run an experiment.
 
     IRunner contains all the logic of how to run the experiment,
-    stages, epoch and batches.
+    stages, epochs, loaders and batches.
     """
 
     def __init__(
-        self,
-        model=None,
-        engine: IEngine = None,
-        # experiment: IExperiment = None,
-        # trial: ITrial = None,
+        self, model=None, engine: IEngine = None,
     ):
         # the core
         self.model = model
@@ -45,14 +42,9 @@ class IRunner(ICallback, ILogger):
         # the loggers
         self.loggers: Dict[str, ILogger] = {}
 
-        # the dataflow - model input, model output
-        # @TODO: could we make just self.batch_tensors ?
-        # to store input and output?
-        # self.input = None
-        # self.output = None
+        # the dataflow - model input, model output and other batch tensors
         self.batch = None
 
-        # @TODO: do we need to store metrics under Runner?
         # metrics flow - batch, loader and epoch metrics
         self.batch_metrics: Dict = defaultdict(None)
         self.loader_metrics: Dict = defaultdict(None)
@@ -91,7 +83,7 @@ class IRunner(ICallback, ILogger):
         # extra
         self.exception: Exception = None
         self.need_early_stop: bool = False
-        # self.need_exception_reraise: bool = True
+        self.need_exception_reraise: bool = True
 
     def log_metrics(self, *args, **kwargs) -> None:
         for logger in self.loggers.values():
@@ -162,6 +154,10 @@ class IRunner(ICallback, ILogger):
         self.global_epoch_step: int = 0
         self.global_batch_step: int = 0
         self.global_sample_step: int = 0
+        self.exception: Exception = None
+        self.need_early_stop: bool = False
+        self.need_exception_reraise: bool = True
+
         self.trial = self.experiment.get_trial()
         self.engine = self.experiment.get_engine()
         self.loggers = self.experiment.get_loggers()
@@ -186,11 +182,6 @@ class IRunner(ICallback, ILogger):
 
     def on_loader_start(self, runner: "IRunner"):
         assert self.loader is not None
-        self.loader_batch_len = len(self.loader)
-        if self.loader_batch_len == 0:
-            raise NotImplementedError(
-                f"DataLoader with name {self.loader_key} is empty."
-            )
         self.is_train_loader: bool = self.loader_key.startswith("train")
         self.is_valid_loader: bool = self.loader_key.startswith("valid")
         self.is_infer_loader: bool = self.loader_key.startswith("infer")
@@ -201,6 +192,7 @@ class IRunner(ICallback, ILogger):
         self.loader_metrics: Dict = defaultdict(None)
 
     def on_batch_start(self, runner: "IRunner"):
+        self.batch = self.engine.sync_device(tensor_or_module=self.batch)
         self.batch_size = len(self.batch[0])
         self.global_batch_step += 1
         self.stage_batch_step += 1
@@ -239,18 +231,18 @@ class IRunner(ICallback, ILogger):
         raise self.exception
 
     def _run_event(self, event: str) -> None:
-        if _is_substring(event, ("start",)):
+        if _has_str_intersections(event, ("_start",)):
             getattr(self, event)(self)
         for callback in self.callbacks.values():
             getattr(callback, event)(self)
-        if _is_substring(event, ("end", "exception")):
+        if _has_str_intersections(event, ("_end", "_exception")):
             getattr(self, event)(self)
 
+    @abstractmethod
     def _handle_batch(self, batch):
-        raise NotImplementedError()
+        pass
 
     def _run_batch(self) -> None:
-        self.batch = self.engine.sync_device(tensor_or_module=self.batch)
         self._run_event("on_batch_start")
         self._handle_batch(batch=self.batch)
         self._run_event("on_batch_end")
@@ -347,13 +339,19 @@ class IStageBasedRunner(IRunner):
                     f"DataLoader with name {loader_key} is empty."
                 )
 
+    def on_loader_start(self, runner: "IRunner"):
+        super().on_loader_start(runner)
+        self.loader_batch_len = len(self.loader)
+        if self.loader_batch_len == 0:
+            raise NotImplementedError(
+                f"DataLoader with name {self.loader_key} is empty."
+            )
+
 
 class SupervisedRunner(IStageBasedRunner):
     def _handle_batch(self, batch):
         features, targets = batch
         logits = list(map(self.model, features))
-        # self.input = {"features": features, "targets": targets}
-        # self.output = {"logits": logits}
         self.batch = {
             "features": features,
             "targets": targets,

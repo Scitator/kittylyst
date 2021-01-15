@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 from abc import ABC, abstractmethod
-import sys
 
 import optuna
 from tqdm.auto import tqdm
@@ -53,26 +52,29 @@ class MetricCallback(ICallback):
     def __init__(
         self,
         metric: IMetric,
-        input_key: str,
-        output_key: str,
+        outputs_key: str,
+        targets_key: str,
         compute_on_batch: bool = True,
     ):
         self.metric = metric
-        self.input_key = input_key
-        self.output_key = output_key
+        self.outputs_key = outputs_key
+        self.targets_key = targets_key
         self.compute_on_batch = compute_on_batch
 
     def on_loader_start(self, runner: "IRunner") -> None:
         self.metric.reset()
 
     def on_batch_end(self, runner: "IRunner") -> None:
-        # @TODO: do we need to sync tensors here?
-        inputs = runner.batch[self.output_key]
-        targets = runner.batch[self.input_key]
-        inputs = runner.engine.sync_tensor(inputs)
-        targets = runner.engine.sync_tensor(targets)
+        outputs, targets = (
+            runner.batch[self.outputs_key],
+            runner.batch[self.targets_key],
+        )
+        outputs, targets = (
+            runner.engine.sync_tensor(outputs),
+            runner.engine.sync_tensor(targets),
+        )
 
-        self.metric.update(inputs, targets)
+        self.metric.update(outputs, targets)
         if self.compute_on_batch:
             runner.batch_metrics.update(self.metric.compute_key_value())
 
@@ -81,7 +83,14 @@ class MetricCallback(ICallback):
 
 
 class CriterionCallback(ICallback):
-    def __init__(self, alpha: float = 1e-4):
+    def __init__(
+        self,
+        outputs_key: str = "logits",
+        targets_key: str = "targets",
+        alpha: float = 1e-4,
+    ):
+        self.outputs_key = outputs_key
+        self.targets_key = targets_key
         self.alpha = alpha
         self.average_metric = AverageMetric()
 
@@ -89,10 +98,14 @@ class CriterionCallback(ICallback):
         self.average_metric.reset()
 
     def on_batch_end(self, runner: "IRunner"):
-        # @TODO: do we need to sync tensors here?
-        logits, targets = runner.batch["logits"], runner.batch["targets"]
-        logits = runner.engine.sync_tensor(logits)
-        targets = runner.engine.sync_tensor(targets)
+        logits, targets = (
+            runner.batch[self.outputs_key],
+            runner.batch[self.targets_key],
+        )
+        logits, targets = (
+            runner.engine.sync_tensor(logits),
+            runner.engine.sync_tensor(targets),
+        )
 
         loss = runner.criterion(logits, targets)
         l2_loss = self.alpha * sum((p * p for p in runner.model.parameters()))
@@ -113,9 +126,16 @@ class OptimizerCallback(ICallback):
 
     def on_batch_end(self, runner: "IRunner"):
         if runner.is_train_loader:
-            runner.engine.zero_grad(runner.model, runner.optimizer)
-            runner.batch_metrics[self.metric_key].backward()
-            runner.engine.optimizer_step(runner.model, runner.optimizer)
+            engine, model, criterion, optimizer, loss = (
+                runner.engine,
+                runner.model,
+                runner.criterion,
+                runner.optimizer,
+                runner.batch_metrics[self.metric_key],
+            )
+            engine.zero_grad(model, criterion, optimizer, loss)
+            engine.backward_loss(model, criterion, optimizer, loss)
+            engine.optimizer_step(model, criterion, optimizer, loss)
             runner.batch_metrics.update({"lr": runner.optimizer.lr})
 
     def on_loader_end(self, runner: "IRunner") -> None:
@@ -123,8 +143,17 @@ class OptimizerCallback(ICallback):
 
 
 class SchedulerCallback(ICallback):
+    def __init__(self, mode: str = "epoch"):
+        assert mode in ("epoch", "batch")
+        self.mode = mode
+
+    def on_batch_end(self, runner: "IRunner"):
+        if self.mode == "batch":
+            runner.scheduler.step(runner.stage_batch_step)
+
     def on_epoch_end(self, runner: "IRunner"):
-        runner.scheduler.step(runner.stage_epoch_step)
+        if self.mode == "epoch":
+            runner.scheduler.step(runner.stage_epoch_step)
 
 
 # Should it be ICallback or *ILogger*?
@@ -238,7 +267,7 @@ class TopNMetricHandlerCallback(IMetricHandlerCallback):
 
 class CheckpointCallback(TopNMetricHandlerCallback):
     def handle(self, runner: "IRunner"):
-        # @TODO: here is very simplified logic
+        # simplified logic here
         super().handle(runner=runner)
         checkpoint = runner.engine.pack_checkpoint(
             model=runner.model,
@@ -249,7 +278,7 @@ class CheckpointCallback(TopNMetricHandlerCallback):
         runner.engine.save_checkpoint(checkpoint, "./logpath.pth")
 
     def on_stage_end(self, runner: "IRunner") -> None:
-        # @TODO: here is very simplified logic
+        # simplified logic here
         super().on_stage_end(runner=runner)
         checkpoint = runner.engine.load_checkpoint("./logpath.pth")
         runner.engine.unpack_checkpoint(
