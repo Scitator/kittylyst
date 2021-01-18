@@ -1,7 +1,9 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Any
 import json
 from pathlib import Path
 import random
+import pydoc
+import copy
 
 import numpy as np
 import yaml
@@ -101,3 +103,24 @@ class MicroScheduler:
             self.start_lr - self.start_lr * 0.9 * epoch / self.num_epochs
         )
         self.optimizer.lr = learning_rate
+
+
+def get_from_dict(dict_: dict, **default_kwargs: Any) -> Any:
+    # TODO: add alias `__target_`
+    KEY = "type"
+
+    if not isinstance(dict_, dict) or KEY not in dict_:
+        raise ValueError()
+
+    kwargs = copy.deepcopy(dict_)
+    for key, value in default_kwargs.items():
+        kwargs.setdefault(key, value)
+
+    path = kwargs.pop(KEY)
+
+    # support nested constructions
+    for key, value in kwargs.items():
+        if isinstance(value, dict) and KEY in value:
+            kwargs[key] = get_from_dict(value)
+
+    return pydoc.locate(path)(**kwargs)
