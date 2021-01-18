@@ -176,12 +176,7 @@ class ConfigExperiment(IExperiment):
         return list(self.config["stages"].keys())
 
     def get_stage_params(self, stage: str) -> Dict[str, Any]:
-        return {
-            "num_epochs": self.config["stages"][stage]["num_epochs"],
-            "migrate_model_from_previous_stage": self.config["stages"][
-                stage
-            ].get("migrate_model_from_previous_stage", False),
-        }
+        return self.config["stages"][stage]["params"]
 
     def get_data(self, stage: str) -> Dict[str, Any]:
         return {
@@ -210,14 +205,14 @@ class ConfigExperiment(IExperiment):
         return {}
 
     def get_engine(self) -> IEngine:
-        if params := self.config["common"].get("engine"):
+        if params := self.config.get("engine"):
             return misc.get_from_dict(params)
 
     def get_trial(self) -> ITrial:
-        if params := self.config["common"].get("trail"):
+        if params := self.config.get("trail"):
             return misc.get_from_dict(params)
 
     def get_loggers(self) -> Dict[str, ILogger]:
-        if params := self.config["common"].get("loggers"):
+        if params := self.config.get("loggers"):
             return {k: misc.get_from_dict(v) for k, v in params.items()}
         return {}

@@ -3,23 +3,24 @@ common:
   name: experiment73
   hparams: {}
 
-  engine:
-    type: kittylyst.Engine
+engine:
+  type: kittylyst.Engine
 
-  trial:
-    type: kittylyst.Trial
+trial:
+  type: kittylyst.Trial
 
-  loggers:
-    console:
-      type: kittylyst.ConsoleLogger
-    csv:
-      type: kittylyst.LogdirLogger
-      logdir: ./logdir5
+loggers:
+  console:
+    type: kittylyst.ConsoleLogger
+  csv:
+    type: kittylyst.LogdirLogger
+    logdir: ./logdir5
 
 stages:
   stage1:
-    num_epochs: &stage1_num_epochs 10
-    migrate_model_from_previous_stage: n
+    params:
+      num_epochs: &stage1_num_epochs 10
+      migrate_model_from_previous_stage: n
 
     loaders:
       train_1:
@@ -69,8 +70,9 @@ stages:
         save_n_best: 1
 
   stage2:
-    num_epochs: &stage2_num_epochs 6
-    migrate_model_from_previous_stage: y
+    params:
+      num_epochs: &stage2_num_epochs 6
+      migrate_model_from_previous_stage: y
 
     loaders:
       train_1:
