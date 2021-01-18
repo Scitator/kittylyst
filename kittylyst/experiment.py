@@ -165,9 +165,9 @@ class ConfigExperiment(IExperiment):
     @property
     def hparams(self) -> Dict:
         hparams = self.config["common"].get("hparams")
-        trial_hparams = (
-            trial.params if (trial := self.get_trial()) is not None else None
-        )
+        trial_hparams = self.get_trial()
+        if trial_hparams is not None:
+            trial_hparams = trial_hparams.params
         default = super().name
         return hparams or trial_hparams or default
 
@@ -188,31 +188,38 @@ class ConfigExperiment(IExperiment):
         return misc.get_from_dict(self.config["stages"][stage]["model"])
 
     def get_criterion(self, stage: str):
-        if params := self.config["stages"][stage].get("criterion"):
+        params = self.config["stages"][stage].get("criterion")
+        if params:
             return misc.get_from_dict(params)
 
     def get_optimizer(self, stage: str, model):
-        if params := self.config["stages"][stage].get("optimizer"):
+        params = self.config["stages"][stage].get("optimizer")
+        if params:
             return misc.get_from_dict(params, model=model)
 
     def get_scheduler(self, stage: str, optimizer):
-        if params := self.config["stages"][stage].get("scheduler"):
+        params = self.config["stages"][stage].get("scheduler")
+        if params:
             return misc.get_from_dict(params, optimizer=optimizer)
 
     def get_callbacks(self, stage: str) -> Dict[str, ICallback]:
-        if params := self.config["stages"][stage].get("callbacks"):
+        params = self.config["stages"][stage].get("callbacks")
+        if params:
             return {k: misc.get_from_dict(v) for k, v in params.items()}
         return {}
 
     def get_engine(self) -> IEngine:
-        if params := self.config.get("engine"):
+        params = self.config.get("engine")
+        if params:
             return misc.get_from_dict(params)
 
     def get_trial(self) -> ITrial:
-        if params := self.config.get("trail"):
+        params = self.config.get("trail")
+        if params:
             return misc.get_from_dict(params)
 
     def get_loggers(self) -> Dict[str, ILogger]:
-        if params := self.config.get("loggers"):
+        params = self.config.get("loggers")
+        if params:
             return {k: misc.get_from_dict(v) for k, v in params.items()}
         return {}
