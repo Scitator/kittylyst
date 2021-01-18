@@ -1,6 +1,12 @@
+from typing import Dict, List, Union, Any
+import json
+from pathlib import Path
 import random
+import pydoc
+import copy
 
 import numpy as np
+import yaml
 
 from micrograd.engine import Value
 
@@ -8,6 +14,42 @@ from micrograd.engine import Value
 def set_random_seed(seed: int = 42):
     np.random.seed(seed)
     random.seed(seed)
+
+
+def unvalue(value):
+    return value.data if isinstance(value, Value) else value
+
+
+def format_metrics(dct: Dict):
+    return " ".join([f"{k}: {unvalue(dct[k])}" for k in sorted(dct.keys())])
+
+
+def save_config(
+    config: Union[Dict, List],
+    path: Union[str, Path],
+    data_format: str = None,
+    encoding: str = "utf-8",
+    ensure_ascii: bool = False,
+    indent: int = 2,
+) -> None:
+    path = Path(path)
+
+    if data_format is not None:
+        suffix = data_format
+    else:
+        suffix = path.suffix
+
+    assert suffix in [
+        ".json",
+        ".yml",
+        ".yaml",
+    ], f"Unknown file format '{suffix}'"
+
+    with path.open(encoding=encoding, mode="w") as stream:
+        if suffix == ".json":
+            json.dump(config, stream, indent=indent, ensure_ascii=ensure_ascii)
+        elif suffix in [".yml", ".yaml"]:
+            yaml.dump(config, stream)
 
 
 class MicroLoader:
@@ -53,8 +95,32 @@ class MicroOptimizer:
 class MicroScheduler:
     def __init__(self, optimizer, num_epochs):
         self.optimizer = optimizer
+        self.start_lr = self.optimizer.lr
         self.num_epochs = num_epochs
 
     def step(self, epoch):
-        learning_rate = 1.0 - 0.9 * epoch / self.num_epochs
+        learning_rate = (
+            self.start_lr - self.start_lr * 0.9 * epoch / self.num_epochs
+        )
         self.optimizer.lr = learning_rate
+
+
+def get_from_dict(dict_: dict, **default_kwargs: Any) -> Any:
+    # TODO: add alias `__target_`
+    KEY = "type"
+
+    if not isinstance(dict_, dict) or KEY not in dict_:
+        raise ValueError()
+
+    kwargs = copy.deepcopy(dict_)
+    for key, value in default_kwargs.items():
+        kwargs.setdefault(key, value)
+
+    path = kwargs.pop(KEY)
+
+    # support nested constructions
+    for key, value in kwargs.items():
+        if isinstance(value, dict) and KEY in value:
+            kwargs[key] = get_from_dict(value)
+
+    return pydoc.locate(path)(**kwargs)
